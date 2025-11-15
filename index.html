@@ -65,6 +65,13 @@
 
     document.getElementById("add-param-btn").onclick = () => addParamBlock();
 
+    document.addEventListener("focusin", (e) => {
+      if (e.target.tagName === "INPUT") {
+          setTimeout(() => e.target.select(), 0);
+      }
+    });
+
+
     // 起動時に 1 セットだけ表示
     addParamBlock();
 
