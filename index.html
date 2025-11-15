@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Python 計算機デモ</title>
+</head>
+<body>
+  <h1>Python 計算機</h1>
+
+  <div>
+    <label>a: <input id="input-a" type="number" step="any"></label><br>
+    <label>b: <input id="input-b" type="number" step="any"></label><br>
+    <button id="calc-btn">計算</button>
+  </div>
+
+  <h2>結果</h2>
+  <div id="result">まだ計算していません</div>
+
+  <!-- Pyodide を読み込み -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.0/full/pyodide.js"></script>
+  <script>
+    let pyodideReadyPromise = loadPyodideAndInit();
+
+    async function loadPyodideAndInit() {
+      const pyodide = await loadPyodide();
+
+      // ここにあなたの Python コードを書く（または別ファイルを読み込む）
+      await pyodide.runPythonAsync(`
+def calc(a: float, b: float) -> float:
+    return a * b + 10
+      `);
+
+      return pyodide;
+    }
+
+    document.getElementById("calc-btn").addEventListener("click", async () => {
+      const a = parseFloat(document.getElementById("input-a").value);
+      const b = parseFloat(document.getElementById("input-b").value);
+
+      const resultDiv = document.getElementById("result");
+
+      if (Number.isNaN(a) || Number.isNaN(b)) {
+        resultDiv.textContent = "a と b に数値を入力してください";
+        return;
+      }
+
+      const pyodide = await pyodideReadyPromise;
+
+      // JavaScript の値を Python 側に渡す
+      pyodide.globals.set("a", a);
+      pyodide.globals.set("b", b);
+
+      // Python の calc(a, b) を実行
+      const result = pyodide.runPython("calc(a, b)");
+
+      resultDiv.textContent = `結果: ${result}`;
+    });
+  </script>
+</body>
+</html>
