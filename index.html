@@ -1,59 +1,240 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>Python 計算機デモ</title>
+  <meta charset="UTF-8" />
+  <title>BA ダメージ分布 計算機 (Pyodide)</title>
 </head>
 <body>
-  <h1>Python 計算機</h1>
+  <h1>BA ダメージ分布 計算機</h1>
+
+  <p>
+    下のパラメータは D28 ヒエロ特殊（茶々丸さん案）を固定で使用しています。<br>
+    閾値ダメージと、上位何 % か（例: 5）を入力してください。
+  </p>
 
   <div>
-    <label>a: <input id="input-a" type="number" step="any"></label><br>
-    <label>b: <input id="input-b" type="number" step="any"></label><br>
-    <button id="calc-btn">計算</button>
+    <label>
+      閾値ダメージ (例: 42000000):
+      <input id="input-threshold" type="number" step="1" value="42000000">
+    </label>
+    <br>
+    <label>
+      上位パーセンテージ [%] (例: 5):
+      <input id="input-percent" type="number" step="0.01" value="5">
+    </label>
+    <br>
+    <button id="calc-btn">計算する</button>
   </div>
 
   <h2>結果</h2>
-  <div id="result">まだ計算していません</div>
+  <div id="result">まだ計算していません。</div>
 
-  <!-- Pyodide を読み込み -->
+  <h2>内部で使っている攻撃レンジ</h2>
+  <pre>
+# D28 ヒエロ特殊（茶々丸さん案）
+# アリス・セイア・フユ・マリー・ナギサ・リオ
+# 聖遺物（紫）、聖なる光（聖遺物）x N、不浄なる光（聖遺物）
+# 壺3＆ナギサNS抜け
+params = add_param_string(params, "967,012 - 1,238,906", "4,455,692 - 5,483,561", 65.00, 1)
+# 壺4＆フルバフ
+params = add_param_string(params, "1,167,713 - 1,496,038", "5,482,714 - 6,611,672", 65.00, 1)
+# 壺5＆リオEX抜け
+params = add_param_string(params, "1,116,740 - 1,430,733", "5,278,307 - 6,398,894", 65.00, 1)
+# フルバフ
+params = add_param_string(params, "1,368,413 - 1,753,169", "6,195,839 - 7,405,655", 65.00, 1)
+# メリスNS＆ナギサNS抜け
+params = add_param_string(params, "997,848 - 1,278,412", "4,572,263 - 5,632,908", 59.81, 3)
+  </pre>
+
+  <!-- Pyodide 本体 -->
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.0/full/pyodide.js"></script>
   <script>
-    let pyodideReadyPromise = loadPyodideAndInit();
-
-    async function loadPyodideAndInit() {
+    // Pyodide をロードして、SciPy を読み込み、Python コードを定義
+    let pyodideReadyPromise = (async () => {
       const pyodide = await loadPyodide();
+      await pyodide.loadPackage("scipy");
 
-      // ここにあなたの Python コードを書く（または別ファイルを読み込む）
-      await pyodide.runPythonAsync(`
-def calc(a: float, b: float) -> float:
-    return a * b + 10
-      `);
+      const pythonCode = `
+import numpy as np
+from scipy.signal import fftconvolve
 
+NUM_VALUE = 20000
+
+# --- メイン計算 ---
+def make_pdf(
+    x_array: np.ndarray,
+    a_s_bound: float,
+    a_s: float,
+    a_c_bound: float,
+    a_c: float,
+    perc_c: float,
+) -> np.ndarray:
+    """二つの窓関数が合わさった形"""
+    pdf = np.zeros_like(x_array, dtype=float)
+    condition_s = (a_s_bound <= x_array) & (x_array <= a_s)
+    condition_c = (a_c_bound <= x_array) & (x_array <= a_c)
+    height_s = 1.0 / (a_s - a_s_bound)
+    height_c = 1.0 / (a_c - a_c_bound)
+    p_c = perc_c / 100.0
+    pdf += p_c * condition_c * height_c
+    pdf += (1.0 - p_c) * condition_s * height_s
+    return pdf
+
+
+def convolve_pdf_once(x1: np.ndarray, pdf1: np.ndarray,
+                      x2: np.ndarray, pdf2: np.ndarray):
+    """二つの関数を畳み込む。二つの関数は、境界で十分に 0 へ収束するものとする。"""
+    err = 1e-8
+    if (abs(x1[0] - x2[0]) > err) or (abs((x1[1] - x1[0]) - (x2[1] - x2[0])) > err):
+        raise ValueError("Do not match convolve x array!")
+    x_start = float(x1[0])
+    dx = float(x1[1] - x1[0])
+    conv = fftconvolve(pdf1, pdf2, mode="full") * dx
+    x = x_start + (np.arange(conv.size, dtype=float)) * dx
+    return x, conv
+
+
+def make_pdf_list(x_array: np.ndarray, params):
+    pdf_list = []
+    for param in params:
+        pdf_list.append(
+            make_pdf(
+                x_array,
+                param["a_s_bound"],
+                param["a_s"],
+                param["a_c_bound"],
+                param["a_c"],
+                param["crit_percent"],
+            )
+        )
+    return pdf_list
+
+
+def convolve_pdf_list(x_array: np.ndarray, pdf_list):
+    """
+    入力：共通のx軸と数種類の確率分布
+    出力：拡張されたx軸と畳み込まれた確率分布
+    """
+    x_conv = x_array
+    pdf_conv = pdf_list[0]
+    for next_pdf in pdf_list[1:]:
+        x_conv, pdf_conv = convolve_pdf_once(x_conv, pdf_conv, x_array, next_pdf)
+    return x_conv, pdf_conv
+
+
+def pdf_to_cdf(x: np.ndarray, p: np.ndarray) -> np.ndarray:
+    dx = float(x[1] - x[0])
+    c = np.cumsum(p) * dx
+    c = np.clip(c / c[-1], 0.0, 1.0)
+    return c
+
+# --- 設定用関数 ---
+
+def set_param(a: int, b: int, ac: int, bc: int, p: float) -> dict:
+    """値の入力から辞書を作成する補助関数"""
+    return {"a_s_bound": a, "a_s": b, "a_c_bound": ac, "a_c": bc, "crit_percent": p}
+
+def add_param_string(params, s_range, c_range, p, repeat=1):
+    """
+    s_range: "1,161,098 - 1,487,563" のような文字列
+    c_range: "4,903,505 - 6,008,745" のような文字列
+    p: crit_percent (float)
+    repeat: 追加回数
+    """
+    def parse_range(r):
+        a, b = r.split('-')
+        a = int(a.replace(',', '').strip())
+        b = int(b.replace(',', '').strip())
+        return a, b
+
+    a, b = parse_range(s_range)
+    ac, bc = parse_range(c_range)
+    params += [set_param(a, b, ac, bc, p)] * repeat
+    return params
+
+def get_cdf_list(params):
+    # 計算に使う攻撃のレンジを決定
+    val_min = (np.min([param["a_s_bound"] for param in params]) - 1.0) * 0.0
+    val_max = np.max([param["a_c"] for param in params]) + 1.0
+    x_array = np.linspace(val_min, val_max, NUM_VALUE)
+
+    pdf_list = make_pdf_list(x_array, params)
+    x_conv, pdf_conv = convolve_pdf_list(x_array, pdf_list)
+    c_conv = 1.0 - pdf_to_cdf(x_conv, pdf_conv)
+    return x_conv, c_conv
+
+# --- D28 ヒエロ特殊（茶々丸さん案）のパラメータをまとめて作る ---
+
+def build_params_for_d28():
+    params = []
+    # 壺3＆ナギサNS抜け
+    params = add_param_string(params, "967,012 - 1,238,906", "4,455,692 - 5,483,561", 65.00, 1)
+    # 壺4＆フルバフ
+    params = add_param_string(params, "1,167,713 - 1,496,038", "5,482,714 - 6,611,672", 65.00, 1)
+    # 壺5＆リオEX抜け
+    params = add_param_string(params, "1,116,740 - 1,430,733", "5,278,307 - 6,398,894", 65.00, 1)
+    # フルバフ
+    params = add_param_string(params, "1,368,413 - 1,753,169", "6,195,839 - 7,405,655", 65.00, 1)
+    # メリスNS＆ナギサNS抜け
+    params = add_param_string(params, "997,848 - 1,278,412", "4,572,263 - 5,632,908", 59.81, 3)
+    return params
+
+# --- ブラウザから呼ぶ用の関数 ---
+
+def compute_prob_and_threshold(threshold: float, percent: float):
+    """
+    threshold: このダメージを超える確率を計算
+    percent: 上位 percent [%] に入るために必要なダメージ閾値を返す
+    戻り値: (prob_percent, threshold_for_percent)
+    """
+    params = build_params_for_d28()
+    x_conv, c_conv = get_cdf_list(params)
+
+    # P(V >= threshold) = c_conv(threshold)
+    c_value = float(np.interp(threshold, x_conv, c_conv))
+    prob_percent = c_value * 100.0
+
+    # percent % 以上を出すのに必要な閾値
+    # c_conv は 1 - CDF
+    cdf = 1.0 - np.asarray(c_conv, dtype=float)
+    target = 1.0 - percent * 0.01
+    thr = float(np.interp(target, cdf, x_conv))
+
+    return prob_percent, thr
+      `;
+
+      await pyodide.runPythonAsync(pythonCode);
       return pyodide;
-    }
+    })();
 
     document.getElementById("calc-btn").addEventListener("click", async () => {
-      const a = parseFloat(document.getElementById("input-a").value);
-      const b = parseFloat(document.getElementById("input-b").value);
-
       const resultDiv = document.getElementById("result");
 
-      if (Number.isNaN(a) || Number.isNaN(b)) {
-        resultDiv.textContent = "a と b に数値を入力してください";
+      const threshold = parseFloat(document.getElementById("input-threshold").value);
+      const percent = parseFloat(document.getElementById("input-percent").value);
+
+      if (Number.isNaN(threshold) || Number.isNaN(percent)) {
+        resultDiv.textContent = "threshold と percent に数値を入力してください。";
         return;
       }
 
       const pyodide = await pyodideReadyPromise;
 
-      // JavaScript の値を Python 側に渡す
-      pyodide.globals.set("a", a);
-      pyodide.globals.set("b", b);
+      // Python に値を渡して計算
+      pyodide.globals.set("js_threshold", threshold);
+      pyodide.globals.set("js_percent", percent);
 
-      // Python の calc(a, b) を実行
-      const result = pyodide.runPython("calc(a, b)");
+      const pyResult = pyodide.runPython(`
+prob, thr = compute_prob_and_threshold(js_threshold, js_percent)
+(prob, thr)
+      `);
 
-      resultDiv.textContent = `結果: ${result}`;
+      const [prob, thr] = pyResult.toJs();
+
+      resultDiv.innerHTML =
+        "P(V &ge; " + threshold.toLocaleString() + ") = " + prob.toFixed(2) + " %<br>" +
+        "上位 " + percent.toFixed(2) + " % に入るための必要ダメージ閾値 ≈ " +
+        Math.round(thr).toLocaleString();
     });
   </script>
 </body>
