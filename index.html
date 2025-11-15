@@ -43,19 +43,18 @@
       block.className = "param-block";
 
       block.innerHTML = `
-        <label>S-range: <input type="text" class="s-range"
+        <button class="del-btn">− 削除</button>
+        <label>Normal-range: <input type="text" class="s-range"
           value="${defaults ? defaults.s : ''}" placeholder="967,012 - 1,238,906"></label><br>
 
-        <label>C-range: <input type="text" class="c-range"
+        <label>Critical-range: <input type="text" class="c-range"
           value="${defaults ? defaults.c : ''}" placeholder="4,455,692 - 5,483,561"></label><br>
 
-        <label>Crit[%]: <input type="number" class="crit-percent"
+        <label>Crittical[%]: <input type="number" class="crit-percent"
           value="${defaults ? defaults.p : 65}" step="0.01"></label><br>
 
         <label>Repeat: <input type="number" class="repeat"
           value="${defaults ? defaults.r : 1}" step="1"></label><br>
-
-        <button class="del-btn">− 削除</button>
       `;
 
       block.querySelector(".del-btn").onclick = () => block.remove();
