@@ -43,6 +43,7 @@
       block.className = "param-block";
 
       block.innerHTML = `
+        <label><input type="checkbox" class="use-flag" checked> 使用</label>
         <button class="del-btn">− 削除</button><br>
         
         <label>Normal-range: <input type="text" class="s-range"
@@ -72,7 +73,6 @@
     document.addEventListener("focusin", (e) => {
       const el = e.target;
       if (el.tagName === "INPUT" && el.type === "text") {
-        // フォーカス確定後に選択させる
         setTimeout(() => el.select(), 0);
       }
     });
@@ -178,6 +178,9 @@ def compute_all(param_list, threshold, percent):
 
       // ブラウザ UI → Python の param_list に変換
       paramBlocks.forEach(block => {
+        const use = block.querySelector(".use-flag").checked;
+        if (!use) return;  // チェックされていないブロックはスキップ
+
         const s_range = block.querySelector(".s-range").value;
         const c_range = block.querySelector(".c-range").value;
         const crit = parseFloat(block.querySelector(".crit-percent").value);
