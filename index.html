@@ -18,7 +18,9 @@
 <body>
   <h1>ダメージ計算機（椎葉あびら＠超ヒマリ論）</h1>
 
-  <p>version 1.0.0 (Updated: 2025/11/17)</p>
+  <p>
+    version 1.1.0 (Updated: 2025/11/17)
+  </p>
 
   <p>
     下記のパラメータを入力し、「計算」を押してください。<br>
@@ -78,7 +80,7 @@
 
     function saveStateToUrl(state) {
       try {
-        const json = JSON.stringify(state);
+        const json = JSON.stringify(state); // threshold, percent, params(名前込み), resultHtml をまとめて保存
         // JSON を圧縮して URL 用の安全な文字列に変換
         const compressed = LZString.compressToEncodedURIComponent(json);
         const newHash = "#s=" + compressed;
@@ -98,6 +100,13 @@
       block.className = "param-block";
 
       block.innerHTML = `
+        <label>名前：
+          <input type="text" class="name"
+            value="${defaults && defaults.name !== undefined ? defaults.name : ''}"
+            placeholder="例: ヒマリ(1回目)">
+        </label>
+        <br>
+
         <label><input type="checkbox" class="use-flag"
           ${defaults && defaults.use === false ? "" : "checked"}> 使用</label>
         <button class="del-btn"> - 削除</button><br>
@@ -137,7 +146,7 @@
         return;
       }
 
-      // パラメータブロック
+      // パラメータブロック（name, use, s, c, p, r を defaults として渡す）
       if (Array.isArray(state.params) && state.params.length > 0) {
         state.params.forEach(p => addParamBlock(p));
       } else {
@@ -282,13 +291,16 @@ def compute_all(param_list, threshold, percent):
       paramBlocks.forEach(block => {
         const use = block.querySelector(".use-flag").checked;
 
+        const name = block.querySelector(".name").value;
         const s_range = block.querySelector(".s-range").value;
         const c_range = block.querySelector(".c-range").value;
         const crit = parseFloat(block.querySelector(".crit-percent").value);
         const repeat = parseInt(block.querySelector(".repeat").value);
 
+        // URL 保存用（name も含める）
         saved_params.push({
           use: use,
+          name: name,
           s: s_range,
           c: c_range,
           p: isNaN(crit) ? null : crit,
@@ -299,6 +311,7 @@ def compute_all(param_list, threshold, percent):
           return; // 未使用ブロックは計算に入れない
         }
 
+        // 名前は計算に関係ないので param_list には入れない
         if (s_range && c_range && !isNaN(crit) && !isNaN(repeat)) {
           param_list.push([s_range, c_range, crit, repeat]);
         }
@@ -333,7 +346,7 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
         const state = {
           threshold: threshold,   // 数値として保存（復元時に toLocaleString する）
           percent: percent,
-          params: saved_params,
+          params: saved_params,   // ★ 各ブロックの name も含めて保存
           resultHtml: resultHtml
         };
         saveStateToUrl(state);
@@ -380,7 +393,6 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
     <strong>Repeat</strong> は同じ攻撃を何回繰り返すかを指定します。<br>
     例：その生徒が「2 発撃つ」なら <code>Repeat = 2</code>
   </p>
-
 
   <p>
     複数の攻撃がある場合は「+ パラメータを追加」で追加できます。
