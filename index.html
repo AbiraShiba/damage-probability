@@ -65,10 +65,17 @@
 
     document.getElementById("add-param-btn").onclick = () => addParamBlock();
 
-
     // 起動時に 1 セットだけ表示
     addParamBlock();
 
+    // --- 入力フォーカス時に全選択（text入力だけ） ---
+    document.addEventListener("focusin", (e) => {
+      const el = e.target;
+      if (el.tagName === "INPUT" && el.type === "text") {
+        // フォーカス確定後に選択させる
+        setTimeout(() => el.select(), 0);
+      }
+    });
 
     // --- Pyodide ロード ---
     let pyodideReadyPromise = (async () => {
