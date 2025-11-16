@@ -35,7 +35,34 @@
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.0/full/pyodide.js"></script>
 
   <script>
-    const STORAGE_KEY = "ba_damage_calc_state_v2";
+    // --- URL ハッシュへの保存／復元 ---
+    function loadStateFromUrl() {
+      const hash = window.location.hash;
+      if (!hash || !hash.startsWith("#s=")) {
+        return null;
+      }
+      const encoded = hash.slice(3);
+      try {
+        const json = decodeURIComponent(encoded);
+        return JSON.parse(json);
+      } catch (e) {
+        console.error("URL からの状態復元に失敗:", e);
+        return null;
+      }
+    }
+
+    function saveStateToUrl(state) {
+      try {
+        const json = JSON.stringify(state);
+        const encoded = encodeURIComponent(json);
+        const newHash = "#s=" + encoded;
+        // パスとクエリは維持しつつハッシュだけ更新
+        const newUrl = window.location.pathname + window.location.search + newHash;
+        history.replaceState(null, "", newUrl);
+      } catch (e) {
+        console.error("URL への状態保存に失敗:", e);
+      }
+    }
 
     // --- パラメータ入力ブロック UI 生成 ---
     function addParamBlock(defaults=null) {
@@ -48,21 +75,23 @@
         <label><input type="checkbox" class="use-flag"
           ${defaults && defaults.use === false ? "" : "checked"}> 使用</label>
         <button class="del-btn">− 削除</button><br>
-
+        
         <label>Normal-range: <input type="text" class="s-range"
-          value="${defaults?.s || ""}" placeholder="967,012 - 1,238,906"></label><br>
+          value="${defaults && defaults.s !== undefined ? defaults.s : ''}"
+          placeholder="967,012 - 1,238,906"></label><br>
 
         <label>Critical-range: <input type="text" class="c-range"
-          value="${defaults?.c || ""}" placeholder="4,455,692 - 5,483,561"></label><br>
+          value="${defaults && defaults.c !== undefined ? defaults.c : ''}"
+          placeholder="4,455,692 - 5,483,561"></label><br>
 
         <label>Crittical[%]:
           <input type="number" class="crit-percent" step="0.01"
-          value="${defaults?.p ?? 65}">
+          value="${defaults && defaults.p !== undefined ? defaults.p : 65}">
         </label><br>
 
         <label>Repeat:
           <input type="number" class="repeat" step="1"
-          value="${defaults?.r ?? 1}">
+          value="${defaults && defaults.r !== undefined ? defaults.r : 1}">
         </label><br>
       `;
 
@@ -73,27 +102,31 @@
 
     document.getElementById("add-param-btn").onclick = () => addParamBlock();
 
-    // --- 前回状態の復元 ---
+    // --- ページ初期化：URL から状態復元 ---
     function restoreState() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
+      const state = loadStateFromUrl();
+      if (!state) {
+        // 状態がなければ 1 セットだけ出す
         addParamBlock();
         return;
       }
-      const state = JSON.parse(raw);
 
+      // パラメータブロック
       if (Array.isArray(state.params) && state.params.length > 0) {
         state.params.forEach(p => addParamBlock(p));
       } else {
         addParamBlock();
       }
 
+      // 閾値・パーセント
       if (typeof state.threshold === "number") {
         document.getElementById("input-threshold").value = state.threshold;
       }
       if (typeof state.percent === "number") {
         document.getElementById("input-percent").value = state.percent;
       }
+
+      // 結果
       if (typeof state.resultHtml === "string") {
         document.getElementById("result").innerHTML = state.resultHtml;
       }
@@ -101,7 +134,7 @@
 
     restoreState();
 
-    // --- 入力フォーカス時に全選択（text 入力のみ） ---
+    // --- 入力フォーカス時に全選択（text入力だけ） ---
     document.addEventListener("focusin", (e) => {
       const el = e.target;
       if (el.tagName === "INPUT" && el.type === "text") {
@@ -114,6 +147,7 @@
       const pyodide = await loadPyodide();
       await pyodide.loadPackage("scipy");
 
+      // --- Python コード ---
       const pythonCode = `
 import numpy as np
 from scipy.signal import fftconvolve
@@ -208,6 +242,7 @@ def compute_all(param_list, threshold, percent):
       const param_list = [];
       const saved_params = [];
 
+      // ブラウザ UI → Python の param_list ＋ URL保存用 params に変換
       paramBlocks.forEach(block => {
         const use = block.querySelector(".use-flag").checked;
 
@@ -216,17 +251,17 @@ def compute_all(param_list, threshold, percent):
         const crit = parseFloat(block.querySelector(".crit-percent").value);
         const repeat = parseInt(block.querySelector(".repeat").value);
 
-        // 保存用
         saved_params.push({
           use: use,
           s: s_range,
           c: c_range,
-          p: crit,
-          r: repeat
+          p: isNaN(crit) ? null : crit,
+          r: isNaN(repeat) ? null : repeat
         });
 
-        // 未使用は計算に含めない
-        if (!use) return;
+        if (!use) {
+          return; // 未使用ブロックは計算に入れない
+        }
 
         if (s_range && c_range && !isNaN(crit) && !isNaN(repeat)) {
           param_list.push([s_range, c_range, crit, repeat]);
@@ -252,14 +287,13 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
 
       document.getElementById("result").innerHTML = resultHtml;
 
-      // --- 状態保存 ---
       const state = {
         threshold: threshold,
         percent: percent,
         params: saved_params,
         resultHtml: resultHtml
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      saveStateToUrl(state);
     };
   </script>
 </body>
