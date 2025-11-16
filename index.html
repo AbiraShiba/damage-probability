@@ -3,12 +3,31 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>ダメ確率計算（For 超ヒマリ論）</title>
+  <title>ダメ計(For 超ヒマリ論)</title>
   <style>
     .param-block {
       border: 1px solid #ccc;
-      padding: 10px;
+      padding: 15px;
       margin: 10px 0;
+    }
+
+    /* ここを追加 → パラメータブロック内の入力欄を横長に */
+    .param-block input[type="text"],
+    .param-block input[type="number"] {
+      width: 260px;
+      /* 好きな幅に調整してください */
+      box-sizing: border-box;
+    }
+
+    /* 閾値ダメージと上位パーセント用の入力欄も少し広げる */
+    #input-threshold {
+      width: 200px;
+      box-sizing: border-box;
+    }
+
+    #input-percent {
+      width: 80px;
+      box-sizing: border-box;
     }
   </style>
   <!-- 状態を圧縮するための LZString -->
@@ -19,7 +38,7 @@
   <h1>ダメージ計算機（椎葉あびら＠超ヒマリ論）</h1>
 
   <p>
-    version 1.1.0 (Updated: 2025/11/17)
+    version 1.1.1 (Updated: 2025/11/17)
   </p>
 
   <p>
@@ -34,7 +53,7 @@
   <hr>
 
   <div>
-    <!-- ★ 閾値ダメージをカンマ対応したいので type="text" に変更 -->
+    <!-- 閾値ダメージをカンマ対応したいので type="text" に変更 -->
     <label>閾値ダメージ: <input id="input-threshold" type="text" value="42,000,000"></label><br>
     <label>上位パーセント [%]: <input id="input-percent" type="number" value="5"></label><br>
     <button id="calc-btn">計算する</button>
@@ -278,7 +297,7 @@ def compute_all(param_list, threshold, percent):
 
       if (isNaN(threshold) || isNaN(percent)) {
         document.getElementById("result").innerText =
-          "閾値ダメージと上位パーセントの両方を入力してください。";
+          "閾値ダメージと閾値パーセントの両方を入力してください。";
         return;
       }
 
@@ -338,8 +357,8 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
         const [prob, thr] = result;
 
         const resultHtml =
-          "P(V ≥ " + formatNumberWithComma(threshold) + ") = " + prob.toFixed(2) + " %<br>" +
-          "上位 " + percent + " % に入る閾値: " + formatNumberWithComma(Math.round(thr));
+          "P(ダメージ ≥ " + formatNumberWithComma(threshold) + ") = " + prob.toFixed(2) + " %<br>" +
+          "確率 " + percent + " % で出せるダメージ: " + formatNumberWithComma(Math.round(thr));
 
         document.getElementById("result").innerHTML = resultHtml;
 
