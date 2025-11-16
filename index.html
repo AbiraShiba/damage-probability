@@ -10,6 +10,8 @@
       margin: 10px 0;
     }
   </style>
+  <!-- ここを追加: 状態を圧縮するための LZString -->
+  <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
 </head>
 <body>
   <h1>BA ダメージ分布 計算機</h1>
@@ -35,7 +37,7 @@
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.0/full/pyodide.js"></script>
 
   <script>
-    // --- URL ハッシュへの保存／復元 ---
+    // --- URL ハッシュへの保存／復元（LZ 圧縮版） ---
     function loadStateFromUrl() {
       const hash = window.location.hash;
       if (!hash || !hash.startsWith("#s=")) {
@@ -43,7 +45,11 @@
       }
       const encoded = hash.slice(3);
       try {
-        const json = decodeURIComponent(encoded);
+        // 圧縮された文字列を展開
+        const json = LZString.decompressFromEncodedURIComponent(encoded);
+        if (!json) {
+          throw new Error("decompress failed");
+        }
         return JSON.parse(json);
       } catch (e) {
         console.error("URL からの状態復元に失敗:", e);
@@ -54,8 +60,9 @@
     function saveStateToUrl(state) {
       try {
         const json = JSON.stringify(state);
-        const encoded = encodeURIComponent(json);
-        const newHash = "#s=" + encoded;
+        // JSON を圧縮して URL 用の安全な文字列に変換
+        const compressed = LZString.compressToEncodedURIComponent(json);
+        const newHash = "#s=" + compressed;
         // パスとクエリは維持しつつハッシュだけ更新
         const newUrl = window.location.pathname + window.location.search + newHash;
         history.replaceState(null, "", newUrl);
