@@ -35,7 +35,7 @@
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.0/full/pyodide.js"></script>
 
   <script>
-    const STORAGE_KEY = "ba_damage_calc_state_v1";
+    const STORAGE_KEY = "ba_damage_calc_state_v2";
 
     // --- パラメータ入力ブロック UI 生成 ---
     function addParamBlock(defaults=null) {
@@ -45,19 +45,25 @@
       block.className = "param-block";
 
       block.innerHTML = `
+        <label><input type="checkbox" class="use-flag"
+          ${defaults && defaults.use === false ? "" : "checked"}> 使用</label>
         <button class="del-btn">− 削除</button><br>
-        
+
         <label>Normal-range: <input type="text" class="s-range"
-          value="${defaults && defaults.s !== undefined ? defaults.s : ''}" placeholder="967,012 - 1,238,906"></label><br>
+          value="${defaults?.s || ""}" placeholder="967,012 - 1,238,906"></label><br>
 
         <label>Critical-range: <input type="text" class="c-range"
-          value="${defaults && defaults.c !== undefined ? defaults.c : ''}" placeholder="4,455,692 - 5,483,561"></label><br>
+          value="${defaults?.c || ""}" placeholder="4,455,692 - 5,483,561"></label><br>
 
-        <label>Crittical[%]: <input type="number" class="crit-percent"
-          value="${defaults && defaults.p !== undefined ? defaults.p : 65}" step="0.01"></label><br>
+        <label>Crittical[%]:
+          <input type="number" class="crit-percent" step="0.01"
+          value="${defaults?.p ?? 65}">
+        </label><br>
 
-        <label>Repeat: <input type="number" class="repeat"
-          value="${defaults && defaults.r !== undefined ? defaults.r : 1}" step="1"></label><br>
+        <label>Repeat:
+          <input type="number" class="repeat" step="1"
+          value="${defaults?.r ?? 1}">
+        </label><br>
       `;
 
       block.querySelector(".del-btn").onclick = () => block.remove();
@@ -71,47 +77,34 @@
     function restoreState() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
-        // 保存がなければデフォルトで 1 セット
         addParamBlock();
         return;
       }
-      try {
-        const state = JSON.parse(raw);
+      const state = JSON.parse(raw);
 
-        // パラメータブロック復元
-        const params = Array.isArray(state.params) ? state.params : [];
-        if (params.length === 0) {
-          addParamBlock();
-        } else {
-          params.forEach(p => addParamBlock(p));
-        }
-
-        // 閾値・パーセント
-        if (typeof state.threshold === "number") {
-          document.getElementById("input-threshold").value = state.threshold;
-        }
-        if (typeof state.percent === "number") {
-          document.getElementById("input-percent").value = state.percent;
-        }
-
-        // 結果表示
-        if (typeof state.resultHtml === "string") {
-          document.getElementById("result").innerHTML = state.resultHtml;
-        }
-      } catch (e) {
-        console.error("状態の復元に失敗しました:", e);
+      if (Array.isArray(state.params) && state.params.length > 0) {
+        state.params.forEach(p => addParamBlock(p));
+      } else {
         addParamBlock();
+      }
+
+      if (typeof state.threshold === "number") {
+        document.getElementById("input-threshold").value = state.threshold;
+      }
+      if (typeof state.percent === "number") {
+        document.getElementById("input-percent").value = state.percent;
+      }
+      if (typeof state.resultHtml === "string") {
+        document.getElementById("result").innerHTML = state.resultHtml;
       }
     }
 
-    // ページ読み込み時に前回状態を復元
     restoreState();
 
-    // --- 入力フォーカス時に全選択（text入力だけ） ---
+    // --- 入力フォーカス時に全選択（text 入力のみ） ---
     document.addEventListener("focusin", (e) => {
       const el = e.target;
       if (el.tagName === "INPUT" && el.type === "text") {
-        // フォーカス確定後に選択させる
         setTimeout(() => el.select(), 0);
       }
     });
@@ -121,7 +114,6 @@
       const pyodide = await loadPyodide();
       await pyodide.loadPackage("scipy");
 
-      // --- Python コード ---
       const pythonCode = `
 import numpy as np
 from scipy.signal import fftconvolve
@@ -216,21 +208,28 @@ def compute_all(param_list, threshold, percent):
       const param_list = [];
       const saved_params = [];
 
-      // ブラウザ UI → Python の param_list ＋ 保存用 params に変換
       paramBlocks.forEach(block => {
+        const use = block.querySelector(".use-flag").checked;
+
         const s_range = block.querySelector(".s-range").value;
         const c_range = block.querySelector(".c-range").value;
         const crit = parseFloat(block.querySelector(".crit-percent").value);
         const repeat = parseInt(block.querySelector(".repeat").value);
 
+        // 保存用
+        saved_params.push({
+          use: use,
+          s: s_range,
+          c: c_range,
+          p: crit,
+          r: repeat
+        });
+
+        // 未使用は計算に含めない
+        if (!use) return;
+
         if (s_range && c_range && !isNaN(crit) && !isNaN(repeat)) {
           param_list.push([s_range, c_range, crit, repeat]);
-          saved_params.push({
-            s: s_range,
-            c: c_range,
-            p: crit,
-            r: repeat
-          });
         }
       });
 
@@ -253,18 +252,14 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
 
       document.getElementById("result").innerHTML = resultHtml;
 
-      // --- 状態を localStorage に保存 ---
+      // --- 状態保存 ---
       const state = {
         threshold: threshold,
         percent: percent,
         params: saved_params,
         resultHtml: resultHtml
       };
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      } catch (e) {
-        console.error("状態の保存に失敗しました:", e);
-      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     };
   </script>
 </body>
