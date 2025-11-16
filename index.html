@@ -38,7 +38,7 @@
   <h1>ダメージ計算機（椎葉あびら＠超ヒマリ論）</h1>
 
   <p>
-    version 1.1.1 (Updated: 2025/11/17)
+    version 1.1.2 (Updated: 2025/11/17)
   </p>
 
   <p>
@@ -138,7 +138,7 @@
           value="${defaults && defaults.c !== undefined ? defaults.c : ''}"
           placeholder="4,455,692 - 5,483,561"></label><br>
 
-        <label>Crittical[%]:
+        <label>Crittical [%]:
           <input type="number" class="crit-percent" step="0.01"
           value="${defaults && defaults.p !== undefined ? defaults.p : 65}">
         </label><br>
@@ -357,7 +357,7 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
         const [prob, thr] = result;
 
         const resultHtml =
-          "P(ダメージ ≥ " + formatNumberWithComma(threshold) + ") = " + prob.toFixed(2) + " %<br>" +
+          "P(ダメージ ≥ " + formatNumberWithComma(threshold) + ") = " + prob.toFixed(2) + " [%]<br>" +
           "確率 " + percent + " [%] で出せるダメージ: " + formatNumberWithComma(Math.round(thr));
 
         document.getElementById("result").innerHTML = resultHtml;
