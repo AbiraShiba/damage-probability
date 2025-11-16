@@ -43,6 +43,17 @@
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.0/full/pyodide.js"></script>
 
   <script>
+    // 数値の共通ヘルパ
+    function parseNumberWithComma(str) {
+      if (typeof str !== "string") return NaN;
+      return parseFloat(str.replace(/,/g, ""));
+    }
+
+    function formatNumberWithComma(num) {
+      if (typeof num !== "number" || !isFinite(num)) return "";
+      return num.toLocaleString();
+    }
+
     // --- URL ハッシュへの保存／復元（LZ 圧縮版） ---
     function loadStateFromUrl() {
       const hash = window.location.hash;
@@ -133,8 +144,9 @@
 
       // 閾値・パーセント
       if (typeof state.threshold === "number") {
-        // ★ 復元時にカンマ付き表示
-        document.getElementById("input-threshold").value = state.threshold.toLocaleString();
+        // カンマ付き表示
+        document.getElementById("input-threshold").value =
+          formatNumberWithComma(state.threshold);
       }
       if (typeof state.percent === "number") {
         document.getElementById("input-percent").value = state.percent;
@@ -148,8 +160,7 @@
 
     restoreState();
 
-    // --- 入力フォーカス時に全選択 ---
-    // 以前は type="text" のみだったが、number も含めて全選択する
+    // --- 入力フォーカス時に全選択 (text と number 両方) ---
     document.addEventListener("focusin", (e) => {
       const el = e.target;
       if (el.tagName === "INPUT" && (el.type === "text" || el.type === "number")) {
@@ -249,9 +260,9 @@ def compute_all(param_list, threshold, percent):
 
     // --- 計算ボタン ---
     document.getElementById("calc-btn").onclick = async () => {
-      // ★ 閾値ダメージをカンマ除去して数値化
+      // 閾値ダメージをカンマ除去して数値化
       const thresholdStr = document.getElementById("input-threshold").value;
-      const threshold = parseFloat(thresholdStr.replace(/,/g, ""));
+      const threshold = parseNumberWithComma(thresholdStr);
       const percent = parseFloat(document.getElementById("input-percent").value);
 
       if (isNaN(threshold) || isNaN(percent)) {
@@ -297,34 +308,41 @@ def compute_all(param_list, threshold, percent):
         return;
       }
 
-      const pyodide = await pyodideReadyPromise;
+      try {
+        const pyodide = await pyodideReadyPromise;
 
-      pyodide.globals.set("js_params", param_list);
-      pyodide.globals.set("js_threshold", threshold);
-      pyodide.globals.set("js_percent", percent);
+        pyodide.globals.set("js_params", param_list);
+        pyodide.globals.set("js_threshold", threshold);
+        pyodide.globals.set("js_percent", percent);
 
-      const result = pyodide.runPython(`
+        const result = pyodide.runPython(`
 prob, thr = compute_all(js_params, js_threshold, js_percent)
 (prob, thr)
-      `).toJs();
+        `).toJs();
 
-      const [prob, thr] = result;
+        const [prob, thr] = result;
 
-      const resultHtml =
-        "P(V ≥ " + threshold.toLocaleString() + ") = " + prob.toFixed(2) + " %<br>" +
-        "上位 " + percent + " % に入る閾値: " + Math.round(thr).toLocaleString();
+        const resultHtml =
+          "P(V ≥ " + formatNumberWithComma(threshold) + ") = " + prob.toFixed(2) + " %<br>" +
+          "上位 " + percent + " % に入る閾値: " + formatNumberWithComma(Math.round(thr));
 
-      document.getElementById("result").innerHTML = resultHtml;
+        document.getElementById("result").innerHTML = resultHtml;
 
-      const state = {
-        threshold: threshold,   // ★ 数値として保存（復元時に toLocaleString する）
-        percent: percent,
-        params: saved_params,
-        resultHtml: resultHtml
-      };
-      saveStateToUrl(state);
+        const state = {
+          threshold: threshold,   // 数値として保存（復元時に toLocaleString する）
+          percent: percent,
+          params: saved_params,
+          resultHtml: resultHtml
+        };
+        saveStateToUrl(state);
+      } catch (e) {
+        console.error(e);
+        document.getElementById("result").innerText =
+          "計算中にエラーが発生しました。コンソールログを確認してください。";
+      }
     };
   </script>
+
 
   <h2>📒 使い方</h2>
 
@@ -352,14 +370,15 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
   </p>
 
   <p>
+    <strong>Critical[%]</strong> は会心率を入力します。<br>
+    例：65% なら <code>65</code>
+  </p>
+
+  <p>
     <strong>Repeat</strong> は同じ攻撃を何回繰り返すかを指定します。<br>
     例：その生徒が「2 発撃つ」なら <code>Repeat = 2</code>
   </p>
 
-  <p>
-    <strong>Critical[%]</strong> は会心率を入力します。<br>
-    例：65% なら <code>65</code>
-  </p>
 
   <p>
     複数の攻撃がある場合は「+ パラメータを追加」で追加できます。
