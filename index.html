@@ -11,14 +11,17 @@
       margin: 10px 0;
     }
   </style>
-  <!-- ここを追加: 状態を圧縮するための LZString -->
+  <!-- 状態を圧縮するための LZString -->
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
 </head>
 
 <body>
-  <h1>BA ダメージ分布 計算機</h1>
+  <h1>ダメージ計算機（椎葉あびら＠超ヒマリ論）</h1>
 
-  <p>下記のパラメータを入力し、「計算」を押してください。</p>
+  <p>
+    下記のパラメータを入力し、「計算」を押してください。<br>
+    （📒使い方はページの下にあります）
+  </p>
 
   <div id="param-container"></div>
 
@@ -27,7 +30,8 @@
   <hr>
 
   <div>
-    <label>閾値ダメージ: <input id="input-threshold" type="number" value="42000000"></label><br>
+    <!-- ★ 閾値ダメージをカンマ対応したいので type="text" に変更 -->
+    <label>閾値ダメージ: <input id="input-threshold" type="text" value="42,000,000"></label><br>
     <label>上位パーセント [%]: <input id="input-percent" type="number" value="5"></label><br>
     <button id="calc-btn">計算する</button>
   </div>
@@ -129,7 +133,8 @@
 
       // 閾値・パーセント
       if (typeof state.threshold === "number") {
-        document.getElementById("input-threshold").value = state.threshold;
+        // ★ 復元時にカンマ付き表示
+        document.getElementById("input-threshold").value = state.threshold.toLocaleString();
       }
       if (typeof state.percent === "number") {
         document.getElementById("input-percent").value = state.percent;
@@ -143,10 +148,11 @@
 
     restoreState();
 
-    // --- 入力フォーカス時に全選択（text入力だけ） ---
+    // --- 入力フォーカス時に全選択 ---
+    // 以前は type="text" のみだったが、number も含めて全選択する
     document.addEventListener("focusin", (e) => {
       const el = e.target;
-      if (el.tagName === "INPUT" && el.type === "text") {
+      if (el.tagName === "INPUT" && (el.type === "text" || el.type === "number")) {
         setTimeout(() => el.select(), 0);
       }
     });
@@ -243,8 +249,16 @@ def compute_all(param_list, threshold, percent):
 
     // --- 計算ボタン ---
     document.getElementById("calc-btn").onclick = async () => {
-      const threshold = parseFloat(document.getElementById("input-threshold").value);
+      // ★ 閾値ダメージをカンマ除去して数値化
+      const thresholdStr = document.getElementById("input-threshold").value;
+      const threshold = parseFloat(thresholdStr.replace(/,/g, ""));
       const percent = parseFloat(document.getElementById("input-percent").value);
+
+      if (isNaN(threshold) || isNaN(percent)) {
+        document.getElementById("result").innerText =
+          "閾値ダメージと上位パーセントの両方を入力してください。";
+        return;
+      }
 
       const paramBlocks = document.querySelectorAll(".param-block");
 
@@ -277,6 +291,12 @@ def compute_all(param_list, threshold, percent):
         }
       });
 
+      if (param_list.length === 0) {
+        document.getElementById("result").innerText =
+          "有効なパラメータがありません。（全て未使用か、入力が不足しています）";
+        return;
+      }
+
       const pyodide = await pyodideReadyPromise;
 
       pyodide.globals.set("js_params", param_list);
@@ -297,7 +317,7 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
       document.getElementById("result").innerHTML = resultHtml;
 
       const state = {
-        threshold: threshold,
+        threshold: threshold,   // ★ 数値として保存（復元時に toLocaleString する）
         percent: percent,
         params: saved_params,
         resultHtml: resultHtml
@@ -305,6 +325,45 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
       saveStateToUrl(state);
     };
   </script>
+
+  <h2>📒 使い方</h2>
+
+  <p>
+    （※この計算機はドヒナやミカのような特殊な計算には対応していません）
+  </p>
+
+  <p>
+    事前に、キャラのダメージ最小値（下限）と最大値（上限）を
+    「何らかの手段」で準備してください。
+  </p>
+
+  <p>
+    入力欄には次の形式で記入します：
+  </p>
+
+  <ul>
+    <li><code>下限 - 上限</code>（ハイフン区切り）</li>
+    <li><code>967,012 - 1,238,906</code> のようにカンマ入りでも可</li>
+    <li>半角スペースがあっても問題ありません</li>
+  </ul>
+
+  <p>
+    Normal-range と Critical-range の両方を、同じ形式で入力してください。
+  </p>
+
+  <p>
+    <strong>Repeat</strong> は同じ攻撃を何回繰り返すかを指定します。<br>
+    例：その生徒が「2 発撃つ」なら <code>Repeat = 2</code>
+  </p>
+
+  <p>
+    <strong>Critical[%]</strong> は会心率を入力します。<br>
+    例：65% なら <code>65</code>
+  </p>
+
+  <p>
+    複数の攻撃がある場合は「+ パラメータを追加」で追加できます。
+  </p>
 </body>
 
 </html>
