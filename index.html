@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8" />
-  <title>BA ダメージ分布 計算機 (Pyodide)</title>
+  <title>ダメ確率計算 (For 超ヒマリ論)</title>
   <style>
     .param-block {
       border: 1px solid #ccc;
@@ -13,6 +14,7 @@
   <!-- ここを追加: 状態を圧縮するための LZString -->
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
 </head>
+
 <body>
   <h1>BA ダメージ分布 計算機</h1>
 
@@ -20,7 +22,7 @@
 
   <div id="param-container"></div>
 
-  <button id="add-param-btn">＋ パラメータを追加</button>
+  <button id="add-param-btn"> + パラメータを追加</button>
 
   <hr>
 
@@ -72,7 +74,7 @@
     }
 
     // --- パラメータ入力ブロック UI 生成 ---
-    function addParamBlock(defaults=null) {
+    function addParamBlock(defaults = null) {
       const container = document.getElementById("param-container");
 
       const block = document.createElement("div");
@@ -81,8 +83,8 @@
       block.innerHTML = `
         <label><input type="checkbox" class="use-flag"
           ${defaults && defaults.use === false ? "" : "checked"}> 使用</label>
-        <button class="del-btn">− 削除</button><br>
-        
+        <button class="del-btn"> - 削除</button><br>
+
         <label>Normal-range: <input type="text" class="s-range"
           value="${defaults && defaults.s !== undefined ? defaults.s : ''}"
           placeholder="967,012 - 1,238,906"></label><br>
@@ -304,4 +306,5 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
     };
   </script>
 </body>
+
 </html>
