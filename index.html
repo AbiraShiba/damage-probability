@@ -55,7 +55,7 @@
   <div>
     <!-- 閾値ダメージをカンマ対応したいので type="text" に変更 -->
     <label>閾値ダメージ: <input id="input-threshold" type="text" value="42,000,000"></label><br>
-    <label>上位パーセント [%]: <input id="input-percent" type="number" value="5"></label><br>
+    <label>閾値パーセント [%]: <input id="input-percent" type="number" value="5"></label><br>
     <button id="calc-btn">計算する</button>
   </div>
 
@@ -358,7 +358,7 @@ prob, thr = compute_all(js_params, js_threshold, js_percent)
 
         const resultHtml =
           "P(ダメージ ≥ " + formatNumberWithComma(threshold) + ") = " + prob.toFixed(2) + " %<br>" +
-          "確率 " + percent + " % で出せるダメージ: " + formatNumberWithComma(Math.round(thr));
+          "確率 " + percent + " [%] で出せるダメージ: " + formatNumberWithComma(Math.round(thr));
 
         document.getElementById("result").innerHTML = resultHtml;
 
